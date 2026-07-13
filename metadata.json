@@ -1,0 +1,6 @@
+{
+  "name": "MoodMatch 🍿",
+  "description": "Discover movies by mixing traditional filters with abstract mood filters. Dynamic, dark-themed, and responsive TOP 10 movies selector.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
