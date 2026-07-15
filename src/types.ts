@@ -9,6 +9,12 @@ export interface Movie {
   genre_ids: number[];
   popularity: number;
   adult?: boolean;
+  media_type?: "movie" | "tv";
+}
+
+export interface WatchlistItem {
+  id: number;
+  type: "movie" | "tv";
 }
 
 export interface Review {
@@ -27,7 +33,6 @@ export interface FilterConfig {
   searchQuery?: string;
 }
 
-// Global Static TMDB Genre Dictionary
 export const GENRE_MAP: Record<number, string> = {
   28: "Action",
   12: "Adventure",
@@ -47,7 +52,16 @@ export const GENRE_MAP: Record<number, string> = {
   10770: "TV Movie",
   53: "Thriller",
   10752: "War",
-  37: "Western"
+  37: "Western",
+  // TV specific genres
+  10759: "Action & Adv",
+  10762: "Kids",
+  10763: "News",
+  10764: "Reality",
+  10765: "Sci-Fi & Fantasy",
+  10766: "Soap",
+  10767: "Talk",
+  10768: "War & Politics",
 };
 
 export function countActiveFilters(config: FilterConfig): number {
@@ -78,6 +92,7 @@ export interface SpotlightItem {
   industry: "en" | "hi";
   genreIds: number[];
   overview: string;
+  media_type?: "movie" | "tv";
 }
 
 export interface MovieCast {

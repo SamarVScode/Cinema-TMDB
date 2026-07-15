@@ -1,5 +1,5 @@
 import React from "react";
-import { Movie, GENRE_MAP } from "../types";
+import { Movie, GENRE_MAP, WatchlistItem } from "../types";
 import { Star, Eye, Calendar, Languages, Heart, Sparkles, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { getMoodForMovie } from "../tmdb";
@@ -9,8 +9,8 @@ interface MovieGridProps {
   movies: Movie[];
   loading: boolean;
   onOpenReviews: (movie: Movie) => void;
-  watchlist: number[];
-  onToggleWatchlist: (movieId: number) => void;
+  watchlist: WatchlistItem[];
+  onToggleWatchlist: (movie: Movie) => void;
   onReset: () => void;
   onClickMovie?: (movie: Movie) => void;
   hasMore?: boolean;
@@ -179,7 +179,7 @@ export default function MovieGrid({
       >
         <AnimatePresence mode="popLayout">
           {movies.map((movie, index) => {
-            const isFavorited = watchlist.includes(movie.id);
+            const isFavorited = watchlist.some(w => w.id === movie.id);
             const releaseYear = movie.release_date
               ? new Date(movie.release_date).getFullYear()
               : "N/A";
@@ -219,7 +219,7 @@ export default function MovieGrid({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleWatchlist(movie.id);
+                    onToggleWatchlist(movie);
                   }}
                   className="absolute top-3 right-3 p-2 bg-black/80 hover:bg-black backdrop-blur-md rounded-xl border border-zinc-800 text-zinc-400 hover:text-pink-500 focus:text-pink-500 transition-all cursor-pointer focus:outline-none"
                   aria-label="Add to Watchlist"

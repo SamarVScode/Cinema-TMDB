@@ -83,6 +83,54 @@ async function startServer() {
   });
 
   // -------------------------------------------------------------------------
+  // 🍿 MOVIE BOT RELAY PROXY ENDPOINT
+  // -------------------------------------------------------------------------
+  app.all("/api/relay/*", async (req, res) => {
+    try {
+      const subpath = req.path.replace(/^\/api\/relay\//, "");
+      const targetUrl = new URL(`http://localhost:8000/${subpath}`);
+      
+      // Forward all query parameters
+      Object.entries(req.query).forEach(([k, v]) => {
+        if (Array.isArray(v)) {
+          v.forEach(val => targetUrl.searchParams.append(k, String(val)));
+        } else if (v !== undefined) {
+          targetUrl.searchParams.set(k, String(v));
+        }
+      });
+
+      const options: RequestInit = {
+        method: req.method,
+        headers: {
+          "Accept": "application/json"
+        }
+      };
+
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        options.headers = {
+          ...options.headers,
+          "Content-Type": "application/json"
+        };
+        options.body = JSON.stringify(req.body);
+      }
+
+      const relayResponse = await fetch(targetUrl.toString(), options);
+
+      if (!relayResponse.ok) {
+        const errText = await relayResponse.text();
+        console.warn(`Relay API returned error status ${relayResponse.status}:`, errText);
+        return res.status(relayResponse.status).send(errText);
+      }
+
+      const data = await relayResponse.json();
+      return res.json(data);
+    } catch (error: any) {
+      console.error("Relay Proxy Error:", error);
+      return res.status(500).json({ error: error.message || "Internal server error during relay proxy fetch." });
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // ⚡ MOVIE NEWS SCRAPER ENDPOINT
   // -------------------------------------------------------------------------
   app.get("/api/scrape-news", async (req, res) => {
@@ -196,70 +244,7 @@ async function startServer() {
     }
   });
 
-  // -------------------------------------------------------------------------
-  // ⚡ TELEGRAM DISPATCH ENDPOINT
-  // -------------------------------------------------------------------------
-  app.post("/api/telegram/send", async (req, res) => {
-    try {
-      const { botToken, chatId, message, movie } = req.body;
 
-      const finalToken = (botToken && botToken.trim() !== "")
-        ? botToken.trim()
-        : (process.env.TELEGRAM_BOT_TOKEN || "").trim();
-
-      const finalChatId = (chatId && chatId.trim() !== "")
-        ? chatId.trim()
-        : (process.env.TELEGRAM_CHAT_ID || "").trim();
-
-      if (!finalToken) {
-        return res.status(400).json({ 
-          error: "Telegram Bot Token is required. Set it in '.env' or provide it in the input panel." 
-        });
-      }
-
-      if (!finalChatId) {
-        return res.status(400).json({ 
-          error: "Telegram Chat ID is required. Set it in '.env' or provide it in the input panel." 
-        });
-      }
-
-      let textToSend = message || "";
-      if (movie) {
-        const ratingStars = "★".repeat(Math.min(5, Math.max(0, Math.round(movie.vote_average / 2)))) + "☆".repeat(Math.min(5, Math.max(0, 5 - Math.round(movie.vote_average / 2))));
-        
-        textToSend = `<b>🍿 CINEMATIC DISPATCH: ${movie.title.toUpperCase()}</b>\n\n` +
-          `<b>Score:</b> ${movie.vote_average.toFixed(1)} / 10 (${ratingStars})\n` +
-          `<b>Release Year:</b> ${movie.release_date ? new Date(movie.release_date).getFullYear() : "N/A"} (${movie.original_language.toUpperCase()})\n` +
-          `<b>Overview:</b>\n<i>"${movie.overview}"</i>\n\n` +
-          `<a href="${movie.poster_path}">🖼️ View Poster Artwork</a>\n\n` +
-          `<i>⚡ Transmitted via AI Studio Cinematic Row Agent</i>`;
-      }
-
-      const telegramUrl = `https://api.telegram.org/bot${finalToken}/sendMessage`;
-      const response = await fetch(telegramUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: finalChatId,
-          text: textToSend,
-          parse_mode: "HTML",
-          disable_web_page_preview: false
-        })
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.warn("Telegram API Error Response:", errText);
-        return res.status(response.status).json({ error: `Telegram Error: ${errText}` });
-      }
-
-      const resData = await response.json();
-      return res.json({ success: true, result: resData });
-    } catch (error: any) {
-      console.error("Telegram Dispatcher Error:", error);
-      return res.status(500).json({ error: error.message || "Failed to dispatch Telegram transmission" });
-    }
-  });
 
   // -------------------------------------------------------------------------
   // ⚡ VITE DEVELOPMENT & PRODUCTION INTEGRATION

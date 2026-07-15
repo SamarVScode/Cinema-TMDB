@@ -15,6 +15,6 @@ View your app in AI Studio: https://ai.studio/apps/505c5481-0663-4c1b-a597-5ae1d
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Set the `VITE_TMDB_API_KEY` in [.env.local](.env.local) to your TMDB API key
 3. Run the app:
    `npm run dev`

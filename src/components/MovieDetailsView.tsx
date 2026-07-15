@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { MovieDetail, Movie, Review } from "../types";
-import { ArrowLeft, Heart, Calendar, Clock, Globe2, DollarSign, Film, Sparkles, Star, Play, Send, Bot, CheckCircle, RefreshCw } from "lucide-react";
-import { getMovieReviews } from "../tmdb";
+import { ArrowLeft, Heart, Calendar, Clock, Globe2, DollarSign, Film, Sparkles, Star, Play, Send, Bot, CheckCircle, RefreshCw, Tv } from "lucide-react";
+import { getMovieReviews, fetchWatchProviders } from "../tmdb";
 import { motion } from "motion/react";
 
 interface MovieDetailsViewProps {
@@ -29,47 +29,75 @@ export default function MovieDetailsView({
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [activeVideoKey, setActiveVideoKey] = useState<string | null>(null);
 
-  // Telegram Integration States & Handler
-  const [telegramStatus, setTelegramStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  // Movie bot relay Telegram button states & handler
+  const [telegramStatus, setTelegramStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [telegramFeedback, setTelegramFeedback] = useState("");
+  const [providers, setProviders] = useState<any>(null);
+  const [providersLoading, setProvidersLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!detail) return;
+
+    async function loadProviders() {
+      setProvidersLoading(true);
+      try {
+        const data = await fetchWatchProviders(apiKey, movieId);
+        if (active) {
+          const countryKey = detail!.original_language === "hi" ? "IN" : "US";
+          let localProviders = data[countryKey];
+          
+          if (!localProviders) {
+            const availableCountries = Object.keys(data);
+            if (availableCountries.length > 0) {
+              for (const c of availableCountries) {
+                if (data[c] && (data[c].flatrate || data[c].rent || data[c].buy)) {
+                  localProviders = data[c];
+                  break;
+                }
+              }
+            }
+          }
+          setProviders(localProviders || null);
+        }
+      } catch (err) {
+        console.error("Failed loading watch providers:", err);
+      } finally {
+        if (active) {
+          setProvidersLoading(false);
+        }
+      }
+    }
+
+    loadProviders();
+    return () => {
+      active = false;
+    };
+  }, [detail, movieId, apiKey]);
 
   const handleSendToTelegram = async () => {
-    let token = "";
-    let cid = "";
+    if (!detail) return;
+    setTelegramStatus("loading");
+    setTelegramFeedback("");
     try {
-      token = localStorage.getItem("moodmatch_telegram_bot_token") || "";
-      cid = localStorage.getItem("moodmatch_telegram_chat_id") || "";
-    } catch {}
-
-    if (!token || !cid) {
-      alert("Telegram credentials are not configured yet.\n\nPlease navigate to the 'Intelligence' tab in the main header to set up your Bot Token and Chat ID first!");
-      return;
-    }
-
-    setTelegramStatus("sending");
-
-    try {
-      const response = await fetch("/api/telegram/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          botToken: token,
-          chatId: cid,
-          movie: detail
-        })
-      });
-
-      const data = await response.json();
+      const response = await fetch(`/api/relay/auto_download_all?query=${encodeURIComponent(detail.title)}`);
       if (!response.ok) {
-        throw new Error(data.error || "Failed to transmit card.");
+        throw new Error(`API error: ${response.status}`);
       }
-
-      setTelegramStatus("success");
-      setTimeout(() => setTelegramStatus("idle"), 4000);
+      const data = await response.json();
+      if (data.status === "success") {
+        setTelegramStatus("success");
+        setTelegramFeedback(data.message || "Sent successfully!");
+      } else {
+        setTelegramStatus("error");
+        setTelegramFeedback(data.message || "Failed to download.");
+      }
     } catch (err: any) {
       setTelegramStatus("error");
-      alert(`Telegram transmission failed: ${err.message}`);
+      setTelegramFeedback(err.message || "Connection failed.");
     }
   };
+
 
   // Fetch full details
   useEffect(() => {
@@ -266,33 +294,7 @@ export default function MovieDetailsView({
               <span>{isFavorited ? "Remove from Watchlist" : "Add to Watchlist"}</span>
             </button>
 
-            {/* Telegram Dispatch Button */}
-            <button
-              onClick={handleSendToTelegram}
-              disabled={telegramStatus === "sending"}
-              className={`w-full py-3.5 px-6 rounded-2xl text-xs font-black tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all cursor-pointer focus:outline-none active:scale-[0.98] border ${
-                telegramStatus === "success"
-                  ? "bg-emerald-950/40 border-emerald-500/50 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
-                  : telegramStatus === "sending"
-                  ? "bg-zinc-900 border-zinc-800 text-zinc-500 animate-pulse"
-                  : "bg-purple-950/40 hover:bg-purple-900/50 border-purple-500/50 text-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.15)]"
-              }`}
-            >
-              {telegramStatus === "sending" ? (
-                <RefreshCw className="w-4 h-4 animate-spin text-purple-400" />
-              ) : telegramStatus === "success" ? (
-                <CheckCircle className="w-4 h-4 text-emerald-400" />
-              ) : (
-                <Bot className="w-4 h-4 text-purple-400" />
-              )}
-              <span>
-                {telegramStatus === "sending"
-                  ? "Transmitting..."
-                  : telegramStatus === "success"
-                  ? "Dispatched!"
-                  : "Send to Telegram"}
-              </span>
-            </button>
+
 
             {/* Basic Movie Specs Box */}
             <div className="bg-zinc-950/80 border border-zinc-900/60 rounded-3xl p-5 space-y-4 backdrop-blur-md">
@@ -384,6 +386,160 @@ export default function MovieDetailsView({
               <p className="text-sm md:text-base text-zinc-300 leading-relaxed font-sans font-normal max-w-3xl">
                 {detail.overview || "No synopsis overview description has been catalogued for this title."}
               </p>
+            </div>
+
+            {/* Watch Providers Section */}
+            <div className="space-y-4 pt-4 border-t border-zinc-900">
+              <h3 className="text-xs font-mono font-black uppercase text-zinc-400 tracking-widest flex items-center gap-1.5">
+                <Tv className="w-4 h-4" style={{ color: "oklch(0.7 0.15 140)" }} />
+                <span>Where to Watch (Providers)</span>
+              </h3>
+
+              {providersLoading ? (
+                <p className="text-xs font-mono text-zinc-650 animate-pulse font-medium">Scanning available streaming networks...</p>
+              ) : !providers || (!providers.flatrate && !providers.rent && !providers.buy) ? (
+                <p className="text-xs text-zinc-550 italic font-medium">No watch providers are currently listed for this title in your region.</p>
+              ) : (
+                <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-5 max-w-2xl space-y-4">
+                  {providers.flatrate && providers.flatrate.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest block">Stream (Subscription)</span>
+                      <div className="flex flex-wrap gap-3">
+                        {providers.flatrate.map((p: any) => (
+                          <div key={p.provider_id} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 pr-3 shadow-sm">
+                            <img
+                              src={`https://image.tmdb.org/t/p/original${p.logo_path}`}
+                              alt={p.provider_name}
+                              className="w-6 h-6 rounded-md object-cover border border-zinc-800"
+                            />
+                            <span className="text-[10px] font-medium text-zinc-250">{p.provider_name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {providers.rent && providers.rent.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest block">Rent</span>
+                      <div className="flex flex-wrap gap-3">
+                        {providers.rent.map((p: any) => (
+                          <div key={p.provider_id} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 pr-3 shadow-sm">
+                            <img
+                              src={`https://image.tmdb.org/t/p/original${p.logo_path}`}
+                              alt={p.provider_name}
+                              className="w-6 h-6 rounded-md object-cover border border-zinc-800"
+                            />
+                            <span className="text-[10px] font-medium text-zinc-250">{p.provider_name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {providers.buy && providers.buy.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest block">Buy</span>
+                      <div className="flex flex-wrap gap-3">
+                        {providers.buy.map((p: any) => (
+                          <div key={p.provider_id} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 pr-3 shadow-sm">
+                            <img
+                              src={`https://image.tmdb.org/t/p/original${p.logo_path}`}
+                              alt={p.provider_name}
+                              className="w-6 h-6 rounded-md object-cover border border-zinc-800"
+                            />
+                            <span className="text-[10px] font-medium text-zinc-250">{p.provider_name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {providers.link && (
+                    <div className="pt-2 border-t border-zinc-900/60">
+                      <a
+                        href={providers.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[9px] font-mono text-pink-500 hover:text-white transition-colors"
+                      >
+                        Source: JustWatch ➔
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Telegram Relay Bot Section */}
+            <div className="space-y-4 pt-4 border-t border-zinc-900">
+              <h3 className="text-xs font-mono font-black uppercase text-zinc-400 tracking-widest flex items-center gap-1.5">
+                <Send className="w-4 h-4" style={{ color: "oklch(0.65 0.18 250)" }} />
+                <span>Telegram Bot Relay</span>
+              </h3>
+              
+              <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-5 max-w-2xl">
+                <p className="text-xs text-zinc-400 leading-relaxed mb-4" style={{ maxWidth: "65ch" }}>
+                  Send this movie directly to the Telegram relay bot. It will search, download, and forward the film media package to your target account.
+                </p>
+                
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <button
+                    onClick={handleSendToTelegram}
+                    disabled={telegramStatus === "loading"}
+                    style={{
+                      backgroundColor: telegramStatus === "loading"
+                        ? "oklch(0.3 0.05 250)"
+                        : telegramStatus === "success"
+                        ? "oklch(0.25 0.09 140)"
+                        : telegramStatus === "error"
+                        ? "oklch(0.25 0.09 25)"
+                        : "oklch(0.62 0.18 250)",
+                      borderColor: telegramStatus === "success"
+                        ? "oklch(0.5 0.12 140)"
+                        : telegramStatus === "error"
+                        ? "oklch(0.5 0.12 25)"
+                        : "transparent",
+                      color: telegramStatus === "loading" ? "oklch(0.6 0.02 250)" : "oklch(0.99 0.01 250)",
+                      transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+                    }}
+                    className={`px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 border cursor-pointer active:scale-[0.98] transition-all duration-300`}
+                  >
+                    {telegramStatus === "loading" ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Requesting File...</span>
+                      </>
+                    ) : telegramStatus === "success" ? (
+                      <>
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Sent to Telegram!</span>
+                      </>
+                    ) : telegramStatus === "error" ? (
+                      <>
+                        <Bot className="w-4 h-4" />
+                        <span>Failed to Send</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        <span>Send to Telegram</span>
+                      </>
+                    )}
+                  </button>
+
+                  {telegramFeedback && (
+                    <span 
+                      style={{
+                        color: telegramStatus === "success" ? "oklch(0.75 0.15 140)" : "oklch(0.75 0.15 25)"
+                      }}
+                      className="text-xs font-mono"
+                    >
+                      {telegramFeedback}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Cast & Credits scroll */}

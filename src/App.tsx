@@ -16,7 +16,7 @@ import WatchlistAlert from "./components/WatchlistAlert";
 import MovieDetailsView from "./components/MovieDetailsView";
 import IntelligenceHub from "./components/IntelligenceHub";
 import { fetchFilteredMovies, fetchSpotlightMovies, fetchLandingFeeds, LandingFeeds } from "./tmdb";
-import { Movie, FilterConfig, SpotlightItem, countActiveFilters } from "./types";
+import { Movie, FilterConfig, SpotlightItem, countActiveFilters, WatchlistItem } from "./types";
 import { SlidersHorizontal, Search, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
@@ -43,14 +43,25 @@ export default function App() {
   // ---------------------------------------------------------
 
   // Watchlist array state
-  const [watchlist, setWatchlist] = useState<number[]>(() => {
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>(() => {
     try {
       const saved = localStorage.getItem("moodmatch_watchlist");
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Migration from number[] to WatchlistItem[]
+        if (parsed.length > 0 && typeof parsed[0] === "number") {
+          return parsed.map((id: number) => ({ id, type: "movie" as const }));
+        }
+        return parsed;
+      }
+      return [];
     } catch {
       return [];
     }
   });
+
+  // Media type toggle state
+  const [mediaType, setMediaType] = useState<"movie" | "tv">("movie");
 
   // Dynamic state for active navigation tab
   const [activeTab, setActiveTab] = useState<"showcase" | "search" | "wishlist" | "intelligence">("showcase");
@@ -145,7 +156,7 @@ export default function App() {
     let active = true;
     async function loadDynamicSpotlights() {
       try {
-        const dynamicItems = await fetchSpotlightMovies(apiKey);
+        const dynamicItems = await fetchSpotlightMovies(apiKey, mediaType);
         if (active) {
           setSpotlights(dynamicItems);
         }
@@ -157,7 +168,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [apiKey]);
+  }, [apiKey, mediaType]);
 
   // Fetch parallel landing sub-categories on API key trigger
   useEffect(() => {
@@ -165,7 +176,7 @@ export default function App() {
     async function loadHomeLandingFeeds() {
       setLoadingLanding(true);
       try {
-        const feeds = await fetchLandingFeeds(apiKey);
+        const feeds = await fetchLandingFeeds(apiKey, mediaType);
         if (active) {
           setLandingFeeds(feeds);
         }
@@ -181,7 +192,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [apiKey]);
+  }, [apiKey, mediaType]);
 
   // Main Coordinator: Fetches movies upon Filter modifications using Environment Key
   useEffect(() => {
@@ -193,7 +204,7 @@ export default function App() {
       setPage(1);
       setHasMore(true);
       try {
-        const result = await fetchFilteredMovies(apiKey, filters, 1);
+        const result = await fetchFilteredMovies(apiKey, filters, 1, mediaType);
         if (active) {
           setIsMockMode(result.isMock);
           setMoviesList(result.movies);
@@ -219,7 +230,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [filters, apiKey]);
+  }, [filters, apiKey, mediaType]);
 
   // Load more movies for infinite scrolling
   const loadMoreMovies = async () => {
@@ -227,7 +238,7 @@ export default function App() {
     setLoadingMore(true);
     const nextPage = page + 1;
     try {
-      const result = await fetchFilteredMovies(apiKey, filters, nextPage);
+      const result = await fetchFilteredMovies(apiKey, filters, nextPage, mediaType);
       if (result.movies.length === 0) {
         setHasMore(false);
       } else {
@@ -279,19 +290,19 @@ export default function App() {
   };
 
   // Toggles item inclusion in user watchlist
-  const handleToggleWatchlist = (movieId: number) => {
+  const handleToggleWatchlist = (movie: Movie) => {
     setWatchlist((prev) => {
-      const exists = prev.includes(movieId);
+      const exists = prev.some(w => w.id === movie.id);
       if (!exists) {
         setTooltipText("Saved to Watchlist!");
         setShowWatchlistTooltip(true);
         setTimeout(() => setShowWatchlistTooltip(false), 2500);
-        return [...prev, movieId];
+        return [...prev, { id: movie.id, type: movie.media_type || mediaType }];
       } else {
         setTooltipText("Removed from Watchlist.");
         setShowWatchlistTooltip(true);
         setTimeout(() => setShowWatchlistTooltip(false), 2500);
-        return prev.filter((id) => id !== movieId);
+        return prev.filter((w) => w.id !== movie.id);
       }
     });
   };
@@ -399,7 +410,7 @@ export default function App() {
     : (currentActiveSpotlight ? currentActiveSpotlight.moodName : "");
 
   return (
-    <div className="min-h-screen bg-[#000000] text-zinc-100 flex flex-col font-sans selection:bg-pink-500/20 antialiased overflow-x-hidden">
+    <div className="min-h-screen bg-black text-white font-sans overflow-x-hidden selection:bg-pink-500/30 selection:text-white">
       
       {/* 1. BRANDING HEADER */}
       <Header 
@@ -409,6 +420,8 @@ export default function App() {
         apiKey={apiKey}
         onChangeApiKey={handleUpdateApiKey}
         onResetAll={handleResetFilters}
+        mediaType={mediaType}
+        setMediaType={setMediaType}
       />
 
       {/* Floating Watchlist Alerts */}
@@ -454,8 +467,8 @@ export default function App() {
           setActiveSpotlightIdx={setActiveSpotlightIdx}
           onExploreReviews={() => handleViewSpotlightReviews(isDynamicHeroActive ? moodMatchedBaseMovie! : currentActiveSpotlight!)}
           onInstantMatchMood={() => handleActivateSpotlight(currentActiveSpotlight!)}
-          onToggleWatchlist={() => handleToggleWatchlist(isDynamicHeroActive ? moodMatchedBaseMovie!.id : currentActiveSpotlight!.id)}
-          isFavorited={watchlist.includes(isDynamicHeroActive ? moodMatchedBaseMovie!.id : currentActiveSpotlight!.id)}
+          onToggleWatchlist={() => handleToggleWatchlist(isDynamicHeroActive ? (moodMatchedBaseMovie as unknown as Movie)! : (currentActiveSpotlight as unknown as Movie)!)}
+          isFavorited={watchlist.some(w => w.id === (isDynamicHeroActive ? moodMatchedBaseMovie!.id : currentActiveSpotlight!.id))}
         />
       )}
 
@@ -751,7 +764,7 @@ export default function App() {
               )}
             </div>
           ) : activeTab === "intelligence" ? (
-            // Cinema Intelligence Web Scraper & Telegram Bot dispatcher
+            // Cinema Intelligence Web Scraper
             <IntelligenceHub 
               watchlist={(() => {
                 const allMovies = [...moviesList];

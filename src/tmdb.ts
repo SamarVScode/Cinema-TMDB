@@ -78,7 +78,7 @@ export async function tmdbFetch(apiKey: string, urlStr: string, queryParams: Rec
 /**
  * Fetches filtered results from TMDB strictly (no local fallbacks)
  */
-export async function fetchFilteredMovies(apiKey: string, config: FilterConfig, page: number = 1): Promise<{ movies: Movie[]; isMock: boolean }> {
+export async function fetchFilteredMovies(apiKey: string, config: FilterConfig, page: number = 1, mediaType: "movie" | "tv" = "movie"): Promise<{ movies: Movie[]; isMock: boolean }> {
   const hasSearchQuery = config.searchQuery && config.searchQuery.trim() !== "";
   const activeCount = countActiveFilters(config);
   const isDefaultOverview = activeCount === 0 && !hasSearchQuery;
@@ -87,9 +87,9 @@ export async function fetchFilteredMovies(apiKey: string, config: FilterConfig, 
   if (isDefaultOverview) {
     try {
       const responses = await Promise.all([
-        tmdbFetch(apiKey, "https://api.themoviedb.org/3/movie/top_rated", { language: "en-US", page: page.toString() }).then(res => res.ok ? res.json() : null),
-        tmdbFetch(apiKey, "https://api.themoviedb.org/3/movie/popular", { language: "en-US", page: page.toString() }).then(res => res.ok ? res.json() : null),
-        tmdbFetch(apiKey, "https://api.themoviedb.org/3/movie/now_playing", { language: "en-US", page: page.toString() }).then(res => res.ok ? res.json() : null)
+        tmdbFetch(apiKey, `https://api.themoviedb.org/3/${mediaType}/top_rated`, { language: "en-US", page: page.toString() }).then(res => res.ok ? res.json() : null),
+        tmdbFetch(apiKey, `https://api.themoviedb.org/3/${mediaType}/popular`, { language: "en-US", page: page.toString() }).then(res => res.ok ? res.json() : null),
+        tmdbFetch(apiKey, `https://api.themoviedb.org/3/${mediaType}/${mediaType === "tv" ? "on_the_air" : "now_playing"}`, { language: "en-US", page: page.toString() }).then(res => res.ok ? res.json() : null)
       ]);
       
       const topRated = responses[0]?.results || [];
@@ -119,16 +119,17 @@ export async function fetchFilteredMovies(apiKey: string, config: FilterConfig, 
 
       const moviesList: Movie[] = mixed.slice(0, 24).map((m: any) => ({
         id: m.id,
-        title: m.title,
+        title: m.title || m.name || "Untitled",
         original_language: m.original_language || "en",
-        release_date: m.release_date || "",
+        release_date: m.release_date || m.first_air_date || "",
         vote_average: m.vote_average || 0.0,
         overview: m.overview || "No plot overview provided.",
         poster_path: m.poster_path 
           ? `https://image.tmdb.org/t/p/w500${m.poster_path}`
           : "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&q=80&w=500",
         genre_ids: m.genre_ids || [],
-        popularity: m.popularity || 0
+        popularity: m.popularity || 0,
+        media_type: mediaType
       }));
 
       return {
@@ -147,12 +148,12 @@ export async function fetchFilteredMovies(apiKey: string, config: FilterConfig, 
 
   if (hasSearchQuery) {
     // Use Live TMDB Search API (requires query string)
-    finalUrl = "https://api.themoviedb.org/3/search/movie";
+    finalUrl = `https://api.themoviedb.org/3/search/${mediaType}`;
     params.append("query", config.searchQuery!.trim());
     params.append("include_adult", "false");
   } else {
     // Use premium TMDB Discover Service
-    finalUrl = "https://api.themoviedb.org/3/discover/movie";
+    finalUrl = `https://api.themoviedb.org/3/discover/${mediaType}`;
     params.append("sort_by", config.sortBy);
     
     // Strict thresholds to avoid obscure movies; lower requirements for Bollywood releases
@@ -180,21 +181,22 @@ export async function fetchFilteredMovies(apiKey: string, config: FilterConfig, 
     params.append("vote_average.gte", config.minRating.toString());
 
     // Exact Year or Era Bounds
+    const dateField = mediaType === "tv" ? "first_air_date" : "primary_release_date";
     if (config.exactYear && config.exactYear !== "any") {
-      params.append("primary_release_year", config.exactYear);
+      params.append(mediaType === "tv" ? "first_air_date_year" : "primary_release_year", config.exactYear);
     } else {
       const currentYear = 2026;
       if (config.era === "latest") {
-        params.append("primary_release_date.gte", `${currentYear - 3}-01-01`);
-        params.append("primary_release_date.lte", `${currentYear}-12-31`);
+        params.append(`${dateField}.gte`, `${currentYear - 3}-01-01`);
+        params.append(`${dateField}.lte`, `${currentYear}-12-31`);
       } else if (config.era === "2010s") {
-        params.append("primary_release_date.gte", "2010-01-01");
-        params.append("primary_release_date.lte", "2019-12-31");
+        params.append(`${dateField}.gte`, "2010-01-01");
+        params.append(`${dateField}.lte`, "2019-12-31");
       } else if (config.era === "2000s") {
-        params.append("primary_release_date.gte", "2000-01-01");
-        params.append("primary_release_date.lte", "2009-12-31");
+        params.append(`${dateField}.gte`, "2000-01-01");
+        params.append(`${dateField}.lte`, "2009-12-31");
       } else if (config.era === "classic") {
-        params.append("primary_release_date.lte", "1999-12-31");
+        params.append(`${dateField}.lte`, "1999-12-31");
       }
     }
 
@@ -265,9 +267,9 @@ export async function fetchFilteredMovies(apiKey: string, config: FilterConfig, 
 
   const moviesList: Movie[] = results.slice(0, 24).map((m: any) => ({
     id: m.id,
-    title: m.title || "Untitled",
+    title: m.title || m.name || "Untitled",
     original_language: m.original_language || "en",
-    release_date: m.release_date || "",
+    release_date: m.release_date || m.first_air_date || "",
     vote_average: m.vote_average || 0.0,
     overview: m.overview || "No plot overview provided.",
     poster_path: m.poster_path 
@@ -275,7 +277,8 @@ export async function fetchFilteredMovies(apiKey: string, config: FilterConfig, 
       : "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&q=80&w=500",
     genre_ids: m.genre_ids || [],
     popularity: m.popularity || 0,
-    adult: m.adult || (config.mood === "adult")
+    adult: m.adult || (config.mood === "adult"),
+    media_type: mediaType
   }));
 
   return {
@@ -328,21 +331,21 @@ export function getMoodForMovie(genreIds: number[], isAdultMovie?: boolean): { i
 /**
  * Fetches premium spotlight/featured movies directly from TMDB on the fly.
  */
-export async function fetchSpotlightMovies(apiKey: string): Promise<SpotlightItem[]> {
+export async function fetchSpotlightMovies(apiKey: string, mediaType: "movie" | "tv" = "movie"): Promise<SpotlightItem[]> {
   try {
-    const trendRes = await tmdbFetch(apiKey, "https://api.themoviedb.org/3/trending/movie/day", { page: "1" });
+    const trendRes = await tmdbFetch(apiKey, `https://api.themoviedb.org/3/trending/${mediaType}/day`, { page: "1" });
     if (!trendRes.ok) {
-      throw new Error(`Failed to fetch trending movies: ${trendRes.status}`);
+      throw new Error(`Failed to fetch trending ${mediaType}: ${trendRes.status}`);
     }
     const trendData = await trendRes.json();
-    const trendMovies = (trendData.results || []).slice(0, 5); // Take the top 5 trending movies
+    const trendMovies = (trendData.results || []).slice(0, 5); // Take the top 5 trending items
 
     const results: SpotlightItem[] = [];
 
     await Promise.all(
       trendMovies.map(async (movie: any) => {
         try {
-          const detailRes = await tmdbFetch(apiKey, `https://api.themoviedb.org/3/movie/${movie.id}`);
+          const detailRes = await tmdbFetch(apiKey, `https://api.themoviedb.org/3/${mediaType}/${movie.id}`);
           if (detailRes.ok) {
             const m = await detailRes.json();
             const bgUrl = m.backdrop_path 
@@ -354,8 +357,8 @@ export async function fetchSpotlightMovies(apiKey: string): Promise<SpotlightIte
 
             results.push({
               id: m.id,
-              title: m.title || movie.title,
-              year: m.release_date ? new Date(m.release_date).getFullYear().toString() : "N/A",
+              title: m.title || m.name || movie.title || movie.name,
+              year: (m.release_date || m.first_air_date) ? new Date(m.release_date || m.first_air_date).getFullYear().toString() : "N/A",
               rating: m.vote_average || movie.vote_average || 0.0,
               moodId: moodInfo.id,
               moodName: moodInfo.name,
@@ -364,18 +367,19 @@ export async function fetchSpotlightMovies(apiKey: string): Promise<SpotlightIte
               backdropUrl: bgUrl,
               industry: m.original_language === "hi" ? "hi" : "en",
               genreIds: genreIds,
-              overview: m.overview || movie.overview || "No overview available."
+              overview: m.overview || movie.overview || "No overview available.",
+              media_type: mediaType
             });
           }
         } catch (err) {
-          console.error(`Error fetching movie details for ID ${movie.id}:`, err);
+          console.error(`Error fetching details for ID ${movie.id}:`, err);
         }
       })
     );
 
     return results.sort((a, b) => b.rating - a.rating);
   } catch (error) {
-    console.warn("Failed to fetch dynamic spotlight movies from TMDB:", error);
+    console.warn(`Failed to fetch dynamic spotlight ${mediaType} from TMDB:`, error);
     return [];
   }
 }
@@ -383,9 +387,9 @@ export async function fetchSpotlightMovies(apiKey: string): Promise<SpotlightIte
 /**
  * Fetches reviews from TMDB API strictly
  */
-export async function getMovieReviews(apiKey: string, movieId: number, movieTitle: string): Promise<Review[]> {
+export async function getMovieReviews(apiKey: string, movieId: number, movieTitle: string, mediaType: "movie" | "tv" = "movie"): Promise<Review[]> {
   try {
-    const response = await tmdbFetch(apiKey, `https://api.themoviedb.org/3/movie/${movieId}/reviews`);
+    const response = await tmdbFetch(apiKey, `https://api.themoviedb.org/3/${mediaType}/${movieId}/reviews`);
     if (!response.ok) {
       throw new Error(`TMDB Reviews error ${response.status}`);
     }
@@ -419,35 +423,35 @@ export interface LandingFeeds {
 /**
  * Dynamic landing feeds for Featured, Bollywood, Hollywood, 18+ adult, and Highest Rated Action using Discovery engine
  */
-export async function fetchLandingFeeds(apiKey: string): Promise<LandingFeeds> {
+export async function fetchLandingFeeds(apiKey: string, mediaType: "movie" | "tv" = "movie"): Promise<LandingFeeds> {
   try {
     const [featRes, bollyRes, hollyRes, adultRes, actionRes] = await Promise.all([
-      tmdbFetch(apiKey, "https://api.themoviedb.org/3/movie/top_rated", { language: "en-US", page: "1" })
+      tmdbFetch(apiKey, `https://api.themoviedb.org/3/${mediaType}/top_rated`, { language: "en-US", page: "1" })
         .then(r => r.ok ? r.json() : { results: [] })
         .catch(() => ({ results: [] })),
-      tmdbFetch(apiKey, "https://api.themoviedb.org/3/discover/movie", {
+      tmdbFetch(apiKey, `https://api.themoviedb.org/3/discover/${mediaType}`, {
         with_original_language: "hi",
         with_origin_country: "IN",
         sort_by: "popularity.desc"
       }).then(r => r.ok ? r.json() : { results: [] })
         .catch(() => ({ results: [] })),
-      tmdbFetch(apiKey, "https://api.themoviedb.org/3/discover/movie", {
+      tmdbFetch(apiKey, `https://api.themoviedb.org/3/discover/${mediaType}`, {
         with_original_language: "en",
         with_origin_country: "US",
         sort_by: "popularity.desc"
       }).then(r => r.ok ? r.json() : { results: [] })
         .catch(() => ({ results: [] })),
-      tmdbFetch(apiKey, "https://api.themoviedb.org/3/discover/movie", {
+      tmdbFetch(apiKey, `https://api.themoviedb.org/3/discover/${mediaType}`, {
         include_adult: "false",
         sort_by: "popularity.desc",
-        with_genres: "18|10749|53",
-        with_keywords: "9748|10334|180545|190342|254884|155255|170707|12241|12242",
-        without_genres: "27,16,14,10751,99",
+        with_genres: mediaType === "tv" ? "10766|18" : "18|10749|53", // Soap/Drama for TV, Romance/Drama/Thriller for Movie
+        with_keywords: mediaType === "tv" ? "" : "9748|10334|180545|190342|254884|155255|170707|12241|12242",
+        without_genres: mediaType === "tv" ? "16,10751,10762" : "27,16,14,10751,99",
         "vote_count.gte": "100"
       }).then(r => r.ok ? r.json() : { results: [] })
         .catch(() => ({ results: [] })),
-      tmdbFetch(apiKey, "https://api.themoviedb.org/3/discover/movie", {
-        with_genres: "28",
+      tmdbFetch(apiKey, `https://api.themoviedb.org/3/discover/${mediaType}`, {
+        with_genres: mediaType === "tv" ? "10759" : "28", // Action&Adv vs Action
         sort_by: "vote_average.desc",
         "vote_count.gte": "100"
       }).then(r => r.ok ? r.json() : { results: [] })
@@ -456,16 +460,17 @@ export async function fetchLandingFeeds(apiKey: string): Promise<LandingFeeds> {
 
     const mapper = (results: any[]) => (results || []).slice(0, 16).map((m: any) => ({
       id: m.id,
-      title: m.title || "Untitled",
+      title: m.title || m.name || "Untitled",
       original_language: m.original_language || "en",
-      release_date: m.release_date || "",
+      release_date: m.release_date || m.first_air_date || "",
       vote_average: m.vote_average || 0.0,
       overview: m.overview || "No plot overview provided.",
       poster_path: m.poster_path 
         ? `https://image.tmdb.org/t/p/w500${m.poster_path}`
         : "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&q=80&w=500",
       genre_ids: m.genre_ids || [],
-      popularity: m.popularity || 0
+      popularity: m.popularity || 0,
+      media_type: mediaType
     }));
 
     const rawFeatured = mapper(featRes.results || []);
@@ -514,13 +519,13 @@ export async function fetchLandingFeeds(apiKey: string): Promise<LandingFeeds> {
 /**
  * Fetches comprehensive details for a single movie, including casts, videos/trailers, and recommendations strictly from TMDB.
  */
-export async function fetchFullMovieDetails(apiKey: string, movieId: number, baseMovie?: Movie): Promise<MovieDetail> {
+export async function fetchFullMovieDetails(apiKey: string, movieId: number, baseMovie?: Movie, mediaType: "movie" | "tv" = "movie"): Promise<MovieDetail> {
   try {
     const [detailRes, creditRes, videoRes, similarRes] = await Promise.all([
-      tmdbFetch(apiKey, `https://api.themoviedb.org/3/movie/${movieId}`),
-      tmdbFetch(apiKey, `https://api.themoviedb.org/3/movie/${movieId}/credits`),
-      tmdbFetch(apiKey, `https://api.themoviedb.org/3/movie/${movieId}/videos`),
-      tmdbFetch(apiKey, `https://api.themoviedb.org/3/movie/${movieId}/similar`)
+      tmdbFetch(apiKey, `https://api.themoviedb.org/3/${mediaType}/${movieId}`),
+      tmdbFetch(apiKey, `https://api.themoviedb.org/3/${mediaType}/${movieId}/credits`),
+      tmdbFetch(apiKey, `https://api.themoviedb.org/3/${mediaType}/${movieId}/videos`),
+      tmdbFetch(apiKey, `https://api.themoviedb.org/3/${mediaType}/${movieId}/similar`)
     ]);
 
     let detailData: any = {};
@@ -564,16 +569,17 @@ export async function fetchFullMovieDetails(apiKey: string, movieId: number, bas
       const similarData = await similarRes.json();
       similarList = (similarData.results || []).slice(0, 6).map((m: any) => ({
         id: m.id,
-        title: m.title || "Untitled",
+        title: m.title || m.name || "Untitled",
         original_language: m.original_language || "en",
-        release_date: m.release_date || "",
+        release_date: m.release_date || m.first_air_date || "",
         vote_average: m.vote_average || 0.0,
         overview: m.overview || "No plot overview provided.",
         poster_path: m.poster_path 
           ? `https://image.tmdb.org/t/p/w500${m.poster_path}`
           : "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&q=80&w=500",
         genre_ids: m.genre_ids || [],
-        popularity: m.popularity || 0
+        popularity: m.popularity || 0,
+        media_type: mediaType
       }));
     }
 
@@ -589,15 +595,16 @@ export async function fetchFullMovieDetails(apiKey: string, movieId: number, bas
 
     return {
       id: detailData.id || movieId,
-      title: detailData.title || baseMovie?.title || "Untitled",
+      title: detailData.title || detailData.name || baseMovie?.title || "Untitled",
       original_language: detailData.original_language || baseMovie?.original_language || "en",
-      release_date: detailData.release_date || baseMovie?.release_date || "",
+      release_date: detailData.release_date || detailData.first_air_date || baseMovie?.release_date || "",
       vote_average: detailData.vote_average || baseMovie?.vote_average || 0.0,
       overview: detailData.overview || baseMovie?.overview || "No plot overview provided.",
       poster_path: posterPathUrl,
       genre_ids: detailData.genres ? detailData.genres.map((g: any) => g.id) : (baseMovie?.genre_ids || []),
       popularity: detailData.popularity || baseMovie?.popularity || 0,
       tagline: detailData.tagline || "",
+      media_type: mediaType,
       runtime: detailData.runtime || 0,
       budget: detailData.budget || 0,
       revenue: detailData.revenue || 0,
@@ -612,5 +619,22 @@ export async function fetchFullMovieDetails(apiKey: string, movieId: number, bas
   } catch (error) {
     console.error(`Live movie details fetch failed for ID ${movieId}:`, error);
     throw error;
+  }
+}
+
+/**
+ * Fetches watch providers for a single movie or TV show.
+ */
+export async function fetchWatchProviders(apiKey: string, movieId: number, mediaType: "movie" | "tv" = "movie"): Promise<any> {
+  try {
+    const res = await tmdbFetch(apiKey, `https://api.themoviedb.org/3/${mediaType}/${movieId}/watch/providers`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch watch providers: ${res.status}`);
+    }
+    const data = await res.json();
+    return data.results || {};
+  } catch (err) {
+    console.warn(`Watch providers fetch failed for ID ${movieId}:`, err);
+    return {};
   }
 }
