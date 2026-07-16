@@ -4,8 +4,8 @@ import { motion } from "motion/react";
 
 interface HeaderProps {
   watchlistCount: number;
-  activeTab: "showcase" | "search" | "wishlist" | "intelligence";
-  setActiveTab: (tab: "showcase" | "search" | "wishlist" | "intelligence") => void;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
   apiKey: string;
   onChangeApiKey: (key: string) => void;
   onResetAll: () => void;

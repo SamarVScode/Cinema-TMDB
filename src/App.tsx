@@ -65,7 +65,18 @@ export default function App() {
   const [mediaType, setMediaType] = useState<"movie" | "tv">("movie");
 
   // Dynamic state for active navigation tab
-  const [activeTab, setActiveTab] = useState<"showcase" | "search" | "wishlist" | "intelligence">("showcase");
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const activeTab = location.pathname === "/search" ? "search"
+                  : location.pathname === "/wishlist" ? "wishlist"
+                  : location.pathname === "/intelligence" ? "intelligence"
+                  : "showcase";
+
+  const setActiveTab = (tab: string) => {
+    if (tab === "showcase") navigate("/");
+    else navigate(`/${tab}`);
+  };
 
   // Dynamic API key state
   const [apiKey, setApiKey] = useState<string>(getSavedApiKey);
@@ -643,7 +654,8 @@ export default function App() {
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 py-6 md:py-8 relative select-none">
           <div className="space-y-12">
           
-          {activeTab === "showcase" ? (
+          <Routes>
+          <Route path="/" element={
             // Immersive Landing Page curations
             loadingLanding ? (
               <div className="space-y-14">
@@ -733,7 +745,9 @@ export default function App() {
                 <p className="text-zinc-600 text-xs">Failed to populate landing layout. Check TMDB credentials.</p>
               </div>
             )
-          ) : activeTab === "wishlist" ? (
+          } />
+
+          <Route path="/wishlist" element={
             // Watchlisted screenings view
             <div className="space-y-6">
               <div>
@@ -770,7 +784,9 @@ export default function App() {
                 />
               )}
             </div>
-          ) : activeTab === "intelligence" ? (
+          } />
+
+          <Route path="/intelligence" element={
             // Cinema Intelligence Web Scraper
             <IntelligenceHub 
               watchlist={(() => {
@@ -794,7 +810,9 @@ export default function App() {
               })()}
               onSelectMovie={handleSelectMovieForDetails}
             />
-          ) : (
+          } />
+
+          <Route path="/search" element={
             // Search / Filter discoveries view
             <div className="space-y-6">
               <div className="flex items-center justify-between">
@@ -843,7 +861,8 @@ export default function App() {
                 />
               )}
             </div>
-          )}
+          } />
+          </Routes>
 
           {/* Informational Footer Component */}
           <Footer />
