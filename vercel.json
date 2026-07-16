@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/tmdb/:path*",
+      "destination": "/api/tmdb"
+    },
+    {
+      "source": "/api/relay/:path*",
+      "destination": "/api/relay"
+    }
+  ]
+}
