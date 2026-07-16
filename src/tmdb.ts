@@ -150,7 +150,7 @@ export async function fetchFilteredMovies(apiKey: string, config: FilterConfig, 
     // Use Live TMDB Search API (requires query string)
     finalUrl = `https://api.themoviedb.org/3/search/${mediaType}`;
     params.append("query", config.searchQuery!.trim());
-    params.append("include_adult", "false");
+    if (config.mood === "adult") { params.append("include_adult", "true"); } else { params.append("include_adult", "false"); }
   } else {
     // Use premium TMDB Discover Service
     finalUrl = `https://api.themoviedb.org/3/discover/${mediaType}`;
@@ -166,7 +166,7 @@ export async function fetchFilteredMovies(apiKey: string, config: FilterConfig, 
     }
 
     // Adult content parameter (mainstream R-rated erotic films are false on TMDB)
-    params.append("include_adult", "false");
+    if (config.mood === "adult") { params.append("include_adult", "true"); } else { params.append("include_adult", "false"); }
     
     // Bollywood and Hollywood Origin Specifications
     if (config.industry === "hi") {
@@ -442,7 +442,7 @@ export async function fetchLandingFeeds(apiKey: string, mediaType: "movie" | "tv
       }).then(r => r.ok ? r.json() : { results: [] })
         .catch(() => ({ results: [] })),
       tmdbFetch(apiKey, `https://api.themoviedb.org/3/discover/${mediaType}`, {
-        include_adult: "false",
+        include_adult: "true",
         sort_by: "popularity.desc",
         with_genres: mediaType === "tv" ? "10766|18" : "18|10749|53", // Soap/Drama for TV, Romance/Drama/Thriller for Movie
         with_keywords: mediaType === "tv" ? "" : "9748|10334|180545|190342|254884|155255|170707|12241|12242",

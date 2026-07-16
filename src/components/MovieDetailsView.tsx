@@ -9,7 +9,7 @@ interface MovieDetailsViewProps {
   baseMovie?: Movie;
   apiKey: string;
   onBack: () => void;
-  onToggleWatchlist: (movieId: number) => void;
+  onToggleWatchlist: (movie: Movie) => void;
   watchlist: number[];
   onSelectMovie: (movie: Movie) => void;
 }
@@ -283,7 +283,7 @@ export default function MovieDetailsView({
 
             {/* Watchlist Toggle Hero CTA Button */}
             <button
-              onClick={() => onToggleWatchlist(detail.id)}
+              onClick={() => onToggleWatchlist(detail)}
               className={`w-full py-3.5 px-6 rounded-2xl text-xs font-black tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all cursor-pointer focus:outline-none active:scale-[0.98] border ${
                 isFavorited
                   ? "bg-pink-950/40 hover:bg-pink-900/50 border-pink-500/50 text-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.15)]"

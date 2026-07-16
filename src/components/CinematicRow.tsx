@@ -9,7 +9,7 @@ interface CinematicRowProps {
   movies: Movie[];
   onOpenReviews: (movie: Movie) => void;
   watchlist: number[];
-  onToggleWatchlist: (movieId: number) => void;
+  onToggleWatchlist: (movie: Movie) => void;
   accentColor?: string;
   isMature?: boolean;
   onClickMovie?: (movie: Movie) => void;
@@ -197,7 +197,7 @@ export default function CinematicRow({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onToggleWatchlist(movie.id);
+                        onToggleWatchlist(movie);
                       }}
                       className="absolute top-2.5 right-2.5 p-2 bg-black/80 hover:bg-black backdrop-blur-md rounded-xl border border-zinc-800 text-zinc-400 hover:text-pink-500 transition-colors cursor-pointer focus:outline-none"
                     >

@@ -19,6 +19,7 @@ import { fetchFilteredMovies, fetchSpotlightMovies, fetchLandingFeeds, LandingFe
 import { Movie, FilterConfig, SpotlightItem, countActiveFilters, WatchlistItem } from "./types";
 import { SlidersHorizontal, Search, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 
 // =========================================================================
 // 🔑 TMDB (THE MOVIE DATABASE) API KEY LOADED FROM STORAGE OR ENV
@@ -245,9 +246,6 @@ export default function App() {
         setMoviesList((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
           const filteredNew = result.movies.filter((m) => !existingIds.has(m.id));
-          if (filteredNew.length === 0) {
-            setHasMore(false);
-          }
           return [...prev, ...filteredNew];
         });
         setPage(nextPage);
@@ -277,6 +275,7 @@ export default function App() {
       ...draftFilters,
       searchQuery: searchVal,
     });
+    setIsFilterExpanded(false);
   };
 
   const triggerSearchSubmit = (e?: React.FormEvent) => {
@@ -309,7 +308,7 @@ export default function App() {
 
   // Completely resets filters
   const handleResetFilters = () => {
-    setFilters({
+    const defaultFilters: FilterConfig = {
       industry: "all",
       era: "latest",
       minRating: 5.0,
@@ -318,7 +317,9 @@ export default function App() {
       sortBy: "popularity.desc",
       minRuntime: 0,
       searchQuery: "",
-    });
+    };
+    setFilters(defaultFilters);
+    setDraftFilters(defaultFilters);
     setSearchVal("");
   };
 
@@ -496,7 +497,10 @@ export default function App() {
               {/* Collapsible Toggles for Search and Filters (Separated) */}
               <div className="flex flex-wrap items-center gap-3 self-end sm:self-center">
                 <button
-                  onClick={() => setIsSearchExpanded(!isSearchExpanded)}
+                  onClick={() => {
+                    setIsSearchExpanded(!isSearchExpanded);
+                    if (!isSearchExpanded) setIsFilterExpanded(false);
+                  }}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all border cursor-pointer focus:outline-none ${
                     isSearchExpanded
                       ? "bg-cyan-950/35 border-cyan-500/30 text-cyan-400 font-extrabold shadow-md shadow-cyan-500/5"
@@ -512,7 +516,10 @@ export default function App() {
                 </button>
 
                 <button
-                  onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+                  onClick={() => {
+                    setIsFilterExpanded(!isFilterExpanded);
+                    if (!isFilterExpanded) setIsSearchExpanded(false);
+                  }}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all border cursor-pointer focus:outline-none ${
                     isFilterExpanded
                       ? "bg-pink-950/35 border-pink-500/30 text-pink-400 font-extrabold shadow-md shadow-pink-500/5"
