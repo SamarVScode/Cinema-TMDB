@@ -4,11 +4,13 @@ import { motion } from "motion/react";
 
 interface HeaderProps {
   watchlistCount: number;
-  activeTab: "showcase" | "search" | "wishlist" | "intelligence";
-  setActiveTab: (tab: "showcase" | "search" | "wishlist" | "intelligence") => void;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
   apiKey: string;
   onChangeApiKey: (key: string) => void;
   onResetAll: () => void;
+  mediaType: "movie" | "tv";
+  setMediaType: (mediaType: "movie" | "tv") => void;
 }
 
 export default function Header({
@@ -18,6 +20,8 @@ export default function Header({
   apiKey,
   onChangeApiKey,
   onResetAll,
+  mediaType,
+  setMediaType
 }: HeaderProps) {
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [tempKey, setTempKey] = useState(apiKey);
@@ -123,6 +127,30 @@ export default function Header({
           <Bot className="w-3.5 h-3.5 text-purple-400" />
           <span className="hidden sm:inline">Intelligence</span>
         </motion.button>
+
+        {/* Type Toggle for Movie/TV mode */}
+        <div className="flex bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 ml-4 hidden sm:flex">
+          <button
+            onClick={() => setMediaType("movie")}
+            className={`px-3 py-1 text-[10px] font-bold rounded-md uppercase tracking-wider ${
+              mediaType === "movie"
+                ? "bg-pink-500 text-black shadow-md"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            Movies
+          </button>
+          <button
+            onClick={() => setMediaType("tv")}
+            className={`px-3 py-1 text-[10px] font-bold rounded-md uppercase tracking-wider ${
+              mediaType === "tv"
+                ? "bg-pink-500 text-black shadow-md"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            TV Shows
+          </button>
+        </div>
 
         {/* Dynamic API Key Badge Selector */}
         <div className="relative">

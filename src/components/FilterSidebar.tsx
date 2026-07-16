@@ -69,10 +69,8 @@ export const MoodIcon = ({ id, className }: { id: string; className?: string }) 
 };
 
 const SELECTABLE_YEARS = [
-  "any", "2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019",
-  "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2011", "2010", "2009",
-  "2008", "2007", "2006", "2005", "2003", "2000", "1998", "1995", "1990", "1985",
-  "1980", "1975", "1970", "1960"
+  "any",
+  ...Array.from({ length: 2026 - 1960 + 1 }, (_, i) => (2026 - i).toString())
 ];
 
 export default function FilterSidebar({
@@ -398,7 +396,10 @@ export default function FilterSidebar({
         {onApply && (
           <button
             type="button"
-            onClick={onApply}
+            onClick={(e) => {
+              e.preventDefault();
+              onApply();
+            }}
             className="flex-[2] py-3 bg-gradient-to-r from-pink-500 via-purple-600 to-cyan-400 hover:opacity-90 text-black font-black rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 duration-200 focus:outline-none shadow-[0_0_15px_rgba(236,72,153,0.3)]"
             id="btn-sidebar-apply"
           >

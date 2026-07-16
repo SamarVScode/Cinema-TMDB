@@ -19,6 +19,7 @@ import { fetchFilteredMovies, fetchSpotlightMovies, fetchLandingFeeds, LandingFe
 import { Movie, FilterConfig, SpotlightItem, countActiveFilters, WatchlistItem } from "./types";
 import { SlidersHorizontal, Search, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 
 // =========================================================================
 // 🔑 TMDB (THE MOVIE DATABASE) API KEY LOADED FROM STORAGE OR ENV
@@ -64,7 +65,18 @@ export default function App() {
   const [mediaType, setMediaType] = useState<"movie" | "tv">("movie");
 
   // Dynamic state for active navigation tab
-  const [activeTab, setActiveTab] = useState<"showcase" | "search" | "wishlist" | "intelligence">("showcase");
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const activeTab = location.pathname === "/search" ? "search"
+                  : location.pathname === "/wishlist" ? "wishlist"
+                  : location.pathname === "/intelligence" ? "intelligence"
+                  : "showcase";
+
+  const setActiveTab = (tab: string) => {
+    if (tab === "showcase") navigate("/");
+    else navigate(`/${tab}`);
+  };
 
   // Dynamic API key state
   const [apiKey, setApiKey] = useState<string>(getSavedApiKey);
@@ -245,9 +257,6 @@ export default function App() {
         setMoviesList((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
           const filteredNew = result.movies.filter((m) => !existingIds.has(m.id));
-          if (filteredNew.length === 0) {
-            setHasMore(false);
-          }
           return [...prev, ...filteredNew];
         });
         setPage(nextPage);
@@ -277,6 +286,7 @@ export default function App() {
       ...draftFilters,
       searchQuery: searchVal,
     });
+    setIsFilterExpanded(false);
   };
 
   const triggerSearchSubmit = (e?: React.FormEvent) => {
@@ -309,7 +319,7 @@ export default function App() {
 
   // Completely resets filters
   const handleResetFilters = () => {
-    setFilters({
+    const defaultFilters: FilterConfig = {
       industry: "all",
       era: "latest",
       minRating: 5.0,
@@ -318,7 +328,9 @@ export default function App() {
       sortBy: "popularity.desc",
       minRuntime: 0,
       searchQuery: "",
-    });
+    };
+    setFilters(defaultFilters);
+    setDraftFilters(defaultFilters);
     setSearchVal("");
   };
 
@@ -496,7 +508,10 @@ export default function App() {
               {/* Collapsible Toggles for Search and Filters (Separated) */}
               <div className="flex flex-wrap items-center gap-3 self-end sm:self-center">
                 <button
-                  onClick={() => setIsSearchExpanded(!isSearchExpanded)}
+                  onClick={() => {
+                    setIsSearchExpanded(!isSearchExpanded);
+                    if (!isSearchExpanded) setIsFilterExpanded(false);
+                  }}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all border cursor-pointer focus:outline-none ${
                     isSearchExpanded
                       ? "bg-cyan-950/35 border-cyan-500/30 text-cyan-400 font-extrabold shadow-md shadow-cyan-500/5"
@@ -512,7 +527,10 @@ export default function App() {
                 </button>
 
                 <button
-                  onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+                  onClick={() => {
+                    setIsFilterExpanded(!isFilterExpanded);
+                    if (!isFilterExpanded) setIsSearchExpanded(false);
+                  }}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all border cursor-pointer focus:outline-none ${
                     isFilterExpanded
                       ? "bg-pink-950/35 border-pink-500/30 text-pink-400 font-extrabold shadow-md shadow-pink-500/5"
@@ -636,7 +654,8 @@ export default function App() {
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 py-6 md:py-8 relative select-none">
           <div className="space-y-12">
           
-          {activeTab === "showcase" ? (
+          <Routes>
+          <Route path="/" element={
             // Immersive Landing Page curations
             loadingLanding ? (
               <div className="space-y-14">
@@ -726,7 +745,9 @@ export default function App() {
                 <p className="text-zinc-600 text-xs">Failed to populate landing layout. Check TMDB credentials.</p>
               </div>
             )
-          ) : activeTab === "wishlist" ? (
+          } />
+
+          <Route path="/wishlist" element={
             // Watchlisted screenings view
             <div className="space-y-6">
               <div>
@@ -763,7 +784,9 @@ export default function App() {
                 />
               )}
             </div>
-          ) : activeTab === "intelligence" ? (
+          } />
+
+          <Route path="/intelligence" element={
             // Cinema Intelligence Web Scraper
             <IntelligenceHub 
               watchlist={(() => {
@@ -787,7 +810,9 @@ export default function App() {
               })()}
               onSelectMovie={handleSelectMovieForDetails}
             />
-          ) : (
+          } />
+
+          <Route path="/search" element={
             // Search / Filter discoveries view
             <div className="space-y-6">
               <div className="flex items-center justify-between">
@@ -836,7 +861,8 @@ export default function App() {
                 />
               )}
             </div>
-          )}
+          } />
+          </Routes>
 
           {/* Informational Footer Component */}
           <Footer />
