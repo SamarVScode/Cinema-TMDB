@@ -88,7 +88,8 @@ async function startServer() {
   app.all("/api/relay/*", async (req, res) => {
     try {
       const subpath = req.path.replace(/^\/api\/relay\//, "");
-      const targetUrl = new URL(`http://localhost:8000/${subpath}`);
+      const backendUrl = (process.env.RELAY_API_URL || "http://localhost:8000").replace(/\/$/, "");
+      const targetUrl = new URL(`${backendUrl}/${subpath}`);
       
       // Forward all query parameters
       Object.entries(req.query).forEach(([k, v]) => {
